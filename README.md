@@ -1,6 +1,6 @@
 # SqlAnalyzer
 
-SqlAnalyzer est une bibliothèque .NET Framework 4.8 qui analyse des scripts T-SQL, extrait les objets référencés, résout leurs définitions dans SQL Server, reconstruit leurs dépendances, puis produit un contexte structuré prêt à être envoyé à une IA pour générer de la documentation technique.
+SqlAnalyzer est une bibliothèque .NET qui analyse des scripts T-SQL, extrait les objets référencés, résout leurs définitions dans SQL Server, reconstruit leurs dépendances, puis produit un contexte structuré prêt à être envoyé à une IA pour générer de la documentation technique.
 
 Le dépôt contient deux projets:
 
@@ -12,15 +12,16 @@ Le dépôt contient deux projets:
 - Lecture de fichiers `.sql`.
 - Découpage par lots `GO` et prise en compte des changements de contexte `USE`.
 - Analyse du T-SQL via `Microsoft.SqlServer.TransactSql.ScriptDom`.
-- Détection des références vers `VIEW`, `STORED PROCEDURE`, `FUNCTION`, `TVF` et, selon configuration, `TABLE`.
+- Détection des références vers `VIEW`, `STORED PROCEDURE`, `FUNCTION`, `TVF`, `TRIGGER` et, selon configuration, `TABLE`.
 - Résolution des définitions dans `sys.objects`, `sys.schemas`, `sys.sql_modules` et des dépendances transitives via `sys.sql_expression_dependencies`.
 - Formatage propre des définitions SQL avant génération du contexte.
+- API synchrone et asynchrone pour l’analyse et la résolution des dépendances.
 - Production d’un bloc texte prêt à injecter dans un prompt IA.
 - Journalisation des objets non résolus et des warnings de parsing.
 
 ## Prérequis
 
-- Windows ou environnement capable d’exécuter .NET Framework 4.8.
+- .NET 8 SDK ou runtime compatible pour compiler et exécuter le projet.
 - SQL Server accessible depuis la machine qui exécute l’outil.
 - Droits de lecture sur les métadonnées des objets ciblés, idéalement `VIEW DEFINITION` sur les bases analysées.
 
@@ -33,34 +34,34 @@ Le dépôt contient deux projets:
 
 ## Compilation
 
-Depuis la racine `SqlAnalyzer`:
+Depuis la racine du dépôt `SqlAnalyzer`:
 
-```powershell
-msbuild SqlAnalyzer.sln /p:Configuration=Release
+```bash
+dotnet build SqlAnalyzer.sln -c Release
 ```
 
-Ou via Visual Studio 2022 en ouvrant simplement la solution.
+Ou via Visual Studio 2022 / VS Code avec le SDK .NET installé.
 
 ## Utilisation en ligne de commande
 
 Le projet console attend au minimum une base par défaut et un ou plusieurs fichiers SQL:
 
-```powershell
-SqlAnalyzer.Console.exe --server MYSERVER --database MyDatabase query.sql
+```bash
+dotnet run --project SqlAnalyzer.Console -- --server MYSERVER --database MyDatabase query.sql
 ```
 
 ### Authentification Windows
 
 Si `--user` et `--password` ne sont pas fournis, la connexion utilise l’authentification Windows:
 
-```powershell
-SqlAnalyzer.Console.exe --server MYSERVER --database MyDatabase query.sql
+```bash
+dotnet run --project SqlAnalyzer.Console -- --server MYSERVER --database MyDatabase query.sql
 ```
 
 ### Authentification SQL
 
-```powershell
-SqlAnalyzer.Console.exe --server MYSERVER --database MyDatabase --user sa --password "Secret123!" query.sql
+```bash
+dotnet run --project SqlAnalyzer.Console -- --server MYSERVER --database MyDatabase --user sa --password "Secret123!" query.sql
 ```
 
 ### Options supportées
@@ -75,13 +76,13 @@ SqlAnalyzer.Console.exe --server MYSERVER --database MyDatabase --user sa --pass
 
 ### Exemple complet
 
-```powershell
-SqlAnalyzer.Console.exe `
-  --server MYSERVER `
-  --database MyDatabase `
-  --depth 3 `
-  --output .\prompt-context.txt `
-  .\samples\sample_query.sql
+```bash
+dotnet run --project SqlAnalyzer.Console -- \
+    --server MYSERVER \
+    --database MyDatabase \
+    --depth 3 \
+    --output ./prompt-context.txt \
+    ./samples/sample_query.sql
 ```
 
 ## Utilisation avec une application parente
@@ -111,6 +112,9 @@ using (var connection = new SqlConnection(connectionStringFromParent))
     {
         @"C:\scripts\query.sql"
     });
+
+    // Variante async disponible si l’application parente préfère l’I/O non bloquante.
+    // AnalysisResult result = await orchestrator.AnalyseAsync(new[] { @"C:\scripts\query.sql" });
 }
 ```
 

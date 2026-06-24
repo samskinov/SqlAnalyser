@@ -99,29 +99,38 @@ namespace SqlAnalyzer.Core.Parsing
 
         public override void Visit(FunctionCall node)
         {
-            // Multi-part schema-qualified scalar calls like dbo.fn_Foo(...)
+            // Schema-qualified scalar / TVF calls: SCHEMA.Func(...), DB.SCHEMA.Func(...), etc.
+            // In ScriptDom, FunctionCall.FunctionName holds the function name and
+            // FunctionCall.CallTarget holds only the prefix (schema/database/server).
             if (node?.CallTarget is MultiPartIdentifierCallTarget mpi && mpi.MultiPartIdentifier != null)
             {
-                var identifiers = mpi.MultiPartIdentifier.Identifiers;
-                if (identifiers.Count >= 2)
+                string? functionName = node.FunctionName?.Value;
+                if (string.IsNullOrWhiteSpace(functionName) || BuiltInFunctions.Contains(functionName))
                 {
-                    string objectName = identifiers[identifiers.Count - 1].Value;
-                    string schema     = identifiers[identifiers.Count - 2].Value;
-                    string? database  = identifiers.Count >= 3 ? identifiers[identifiers.Count - 3].Value : null;
-                    string? server    = identifiers.Count >= 4 ? identifiers[identifiers.Count - 4].Value : null;
-
-                    if (!string.IsNullOrWhiteSpace(objectName) && !BuiltInFunctions.Contains(objectName))
-                    {
-                        TryAdd(new SqlObjectReference
-                        {
-                            Server     = string.IsNullOrWhiteSpace(server)   ? null : server,
-                            Database   = string.IsNullOrWhiteSpace(database) ? null : database,
-                            Schema     = string.IsNullOrWhiteSpace(schema)   ? null : schema,
-                            ObjectName = objectName,
-                            ActiveDatabaseContext = _batchContext
-                        });
-                    }
+                    base.Visit(node);
+                    return;
                 }
+
+                var identifiers = mpi.MultiPartIdentifier.Identifiers;
+                // identifiers = [schema] or [database, schema] or [server, database, schema]
+                string? schema   = identifiers.Count >= 1 ? identifiers[identifiers.Count - 1].Value : null;
+                string? database = identifiers.Count >= 2 ? identifiers[identifiers.Count - 2].Value : null;
+                string? server   = identifiers.Count >= 3 ? identifiers[identifiers.Count - 3].Value : null;
+
+                if (!string.IsNullOrEmpty(schema) && SystemSchemas.Contains(schema))
+                {
+                    base.Visit(node);
+                    return;
+                }
+
+                TryAdd(new SqlObjectReference
+                {
+                    Server     = string.IsNullOrWhiteSpace(server)   ? null : server,
+                    Database   = string.IsNullOrWhiteSpace(database) ? null : database,
+                    Schema     = string.IsNullOrWhiteSpace(schema)   ? null : schema,
+                    ObjectName = functionName,
+                    ActiveDatabaseContext = _batchContext
+                });
             }
             base.Visit(node);
         }
